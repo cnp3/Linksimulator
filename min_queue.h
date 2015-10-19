@@ -1,4 +1,4 @@
-/*
+/*  vi:ts=4:sw=4:noet
 The MIT License (MIT)
 
 Copyright (c) 2015 Olivier Tilmans, olivier.tilmans@uclouvain.be

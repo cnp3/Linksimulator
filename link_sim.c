@@ -1,4 +1,4 @@
-/*
+/*  vi:ts=4:sw=4:noet
 The MIT License (MIT)
 
 Copyright (c) 2015 Olivier Tilmans, olivier.tilmans@uclouvain.be
@@ -61,6 +61,15 @@ struct pkt_slot { /* One entry in the packet queue */
 	int size; /* How many bytes are used in buf */
 	char buf[MAX_PKT_LEN]; /* The packet data */
 };
+
+/* Get the human-readable representation of an IPv6 */
+static inline const char *sockaddr6_to_human(const struct in6_addr *a)
+{
+	static char b[INET6_ADDRSTRLEN];
+	/* Can safely ignore return value as we control all parameters */
+	inet_ntop(AF_INET6, a, b, sizeof(*a));
+	return b;
+}
 
 /* @return: left > right */
 static inline int timeval_cmp(const struct timeval *left,
@@ -212,10 +221,8 @@ static int process_incoming_pkt()
 	 */
 	if (!has_source_addr) {
 		memcpy(&src_addr, &from, sizeof(src_addr));
-		char addrstr[INET6_ADDRSTRLEN];
-		inet_ntop(AF_INET6, &from.sin6_addr, addrstr, sizeof(addrstr));
 		fprintf(stderr, "@@ Remote host is %s [%d]\n",
-				addrstr, ntohs(from.sin6_port));
+				sockaddr6_to_human(&from.sin6_addr), ntohs(from.sin6_port));
 		has_source_addr = 1; /* We're logically connected to that guy */
 	}
 	/* Simply relay packets from the host we're proxying */
@@ -229,11 +236,9 @@ static int process_incoming_pkt()
 		return EXIT_SUCCESS;
 	} else if (sockaddr_cmp(&from, &src_addr)) {
 		/* We do not know the guy that sent us this data, ignore him */
-		char addrstr[INET6_ADDRSTRLEN];
-		inet_ntop(AF_INET6, &from.sin6_addr, addrstr, sizeof(addrstr));
 		fprintf(stderr, "@@ Received %d bytes from %s [%d], "
 			"which is an alien to the connection. Dropping it!\n",
-			len, addrstr, ntohs(from.sin6_port));
+			len, sockaddr6_to_human(&from.sin6_addr), ntohs(from.sin6_port));
 		return EXIT_SUCCESS;
 	}
 	/* We have valid data, simulate the behavior of a lossy link
