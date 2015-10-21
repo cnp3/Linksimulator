@@ -9,13 +9,13 @@ Using it is a simple as choosing two UDP ports, one for the proxy, and one for t
 Client machine:
 
 ```bash
-./sender -h server\_address -p proxy\_port
+./sender server_address -proxy_port
 ```
 
 Server machine:
 ```bash
-./link\_sim -p proxy\_port -P server_port &
-./receiver -h :: -p server_port
+./link_sim -p proxy_port -P server_port &
+./receiver :: server_port
 ```
 
 The program only alter the _forward_  direction of the data transfert, traffic from the
