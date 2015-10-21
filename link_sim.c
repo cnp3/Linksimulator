@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 		switch (opt) {
 #define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % lim; break;
 #define _READINT(x, y) _READINT_CAP(x, y, INT_MAX)
-			_READINT_CAP('p', port, SHRT_MAX)
+			_READINT_CAP('p', port, (1<<16) - 1)
 			_READINT_CAP('P', forward_port, SHRT_MAX)
 			_READINT('d', delay)
 			_READINT('j', jitter)
