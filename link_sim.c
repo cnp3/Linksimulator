@@ -462,7 +462,7 @@ int main(int argc, char **argv)
 	/* parse option values */
 	while ((opt = getopt(argc, argv, "p:P:d:j:e:c:s:l:h")) != -1) {
 		switch (opt) {
-#define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % lim; break;
+#define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % (lim); break;
 #define _READINT(x, y) _READINT_CAP(x, y, INT_MAX)
 			_READINT_CAP('p', port, (1 << 16) - 1)
 			_READINT_CAP('P', forward_port, (1 << 16) - 1)
