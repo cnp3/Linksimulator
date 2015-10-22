@@ -1,6 +1,6 @@
 OPTIMIZE=-O2
 CFLAGS=-Wall -Werror -Wshadow -Wextra $(OPTIMIZE) -std=gnu99
-LDFLAGS=
+LDFLAGS=-lrt
 OBJECTS=$(patsubst %.c,%.o,$(wildcard *.c))
 
 link_sim: $(OBJECTS)
