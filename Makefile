@@ -1,6 +1,11 @@
 OPTIMIZE=-O2
 CFLAGS=-Wall -Werror -Wshadow -Wextra $(OPTIMIZE) -std=gnu99
-LDFLAGS=-lrt
+
+UNAME_S := $(shell uname -s)
+ifneq ($(UNAME_S), Darwin)
+	LDFLAGS += -lrt
+endif
+
 OBJECTS=$(patsubst %.c,%.o,$(wildcard *.c))
 
 link_sim: $(OBJECTS)
