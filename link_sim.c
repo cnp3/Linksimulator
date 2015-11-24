@@ -153,8 +153,9 @@ static inline int simulate_link(char *buf, int len)
 		len = 4;
 	/* or do we corrupt it? */
 	} else if (err_rate && RAND_PERCENT < err_rate) {
-		LOG_PKT(buf, "Corrupting packet");
-		buf[len - 1] = ~buf[len - 1]; /* invert last byte of the CRC */
+		int idx = rand() % len;
+		LOG_PKT_FMT(buf, "Corrupting packet: inverted byte #%d\n", idx);
+		buf[idx] = ~buf[idx];
 	}
 	/* Do we want to simulate delay? */
 	if (delay) {
