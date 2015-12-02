@@ -36,6 +36,11 @@ SOFTWARE.
 #include <arpa/inet.h> /* inet_ntop */
 #include <limits.h> /* INT_MAX, SHRT_MAX */
 
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
 #include "min_queue.h" /* minq_x */
 
 /* Max packet length in the protocol */
@@ -284,7 +289,22 @@ static int process_incoming_pkt()
 static int update_time()
 {
 	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
+	int clock_return_call;
+
+	#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
+	clock_serv_t cclock;
+	mach_timespec_t mts;
+	host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+	clock_return_call = clock_get_time(cclock, &mts);
+	mach_port_deallocate(mach_task_self(), cclock);
+	ts.tv_sec = mts.tv_sec;
+	ts.tv_nsec = mts.tv_nsec;
+	#else
+	clock_return_call = clock_gettime(CLOCK_REALTIME, &ts);
+	#endif
+
+
+	if (clock_return_call) {
 		perror("Cannot internal clock");
 		return EXIT_FAILURE;
 	}
