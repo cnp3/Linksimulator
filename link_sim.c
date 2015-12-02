@@ -43,6 +43,21 @@ SOFTWARE.
 /* Random number between 0 and 100 */
 #define RAND_PERCENT ((unsigned int)(rand() % 101))
 
+/* Link directions*/
+#define LINK_FORWARD 1
+#define LINK_REVERSE 2
+#define LINK_BOTH_WAYS (LINK_FORWARD | LINK_REVERSE)
+#define SAME_DIRECTION(x, y) (x & y)
+static inline const char* get_link_direction(int x)
+{
+	switch (x) {
+		case LINK_FORWARD: return "Forward";
+		case LINK_REVERSE: return "Reverse";
+		case LINK_BOTH_WAYS: return "Both ways";
+		default: return "Unknown";
+	}
+}
+
 int forward_port = 12345;
 int port = 2141;
 unsigned int delay = 0;
@@ -50,6 +65,7 @@ unsigned int jitter = 0;
 unsigned int err_rate = 0;
 unsigned int cut_rate = 0;
 unsigned int loss_rate = 0;
+int link_direction = LINK_FORWARD;
 int sfd = -1; /* socket file des. */
 minqueue_t *pkt_queue = NULL; /* Queue for delayed packet */
 struct timeval last_clock; /* Cache current timestamp */
@@ -58,6 +74,7 @@ int has_source_addr = 0; /* Have we seen the other party yet */
 
 struct pkt_slot { /* One entry in the packet queue */
 	struct timeval ts; /* Expiration date */
+	int direction; /* The direction of the packet */
 	int size; /* How many bytes are used in buf */
 	char buf[MAX_PKT_LEN]; /* The packet data */
 };
@@ -100,12 +117,20 @@ static void timeval_diff(const struct timeval *a,
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
-static int write_out(const char *buf, int len)
+static int write_out(const char *buf, int len, int direction)
 {
-	LOG_PKT(buf, "Sent packet");
-	return sendto(sfd, buf, len, 0,
-				(struct sockaddr*)&dest_addr, sizeof(dest_addr)) == len ?
-		EXIT_SUCCESS : EXIT_FAILURE;
+	struct sockaddr_in6 *addr;
+	switch (direction) {
+		case LINK_FORWARD: addr = &dest_addr;
+						   break;
+		case LINK_REVERSE: addr = &src_addr;
+						   break;
+		default: addr = NULL;
+				 break;
+	};
+	LOG_PKT_FMT(buf, "Sent packet (%s).\n", get_link_direction(direction));
+	return sendto(sfd, buf, len, 0, (struct sockaddr*)addr,
+			sizeof(*addr)) == len ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 /* Deliver all queued packets whose timestamps have expired */
@@ -115,7 +140,7 @@ static int deliver_delayed_pkt()
 	/* We have a packet and its timestamp is < current time */
 	while (p && timeval_cmp(&last_clock, &p->ts)) {
 		/* Send it */
-		if (write_out(p->buf, p->size)) {
+		if (write_out(p->buf, p->size, p->direction)) {
 			/* We can try again later for these errors
 			 * (send bunf is full, or ...) */
 			if (errno == EWOULDBLOCK || errno == EINTR || errno == EAGAIN)
@@ -140,7 +165,7 @@ static inline int sockaddr_cmp(const struct sockaddr_in6 *a,
 }
 
 /* Simulate the effect of a lossy link on a received packet */
-static inline int simulate_link(char *buf, int len)
+static inline int simulate_link(char *buf, int len, int direction)
 {
 	/* Do we drop it? */
 	if (loss_rate && RAND_PERCENT < loss_rate) {
@@ -174,6 +199,7 @@ static inline int simulate_link(char *buf, int len)
 					"Failed to allocate memory for a delayed packet!\n");
 			return EXIT_FAILURE;
 		}
+		slot->direction = direction;
 		/* Copy the packet in the slot */
 		memcpy(slot->buf, buf, len);
 		slot->size = len;
@@ -188,7 +214,7 @@ static inline int simulate_link(char *buf, int len)
 		}
 	} else {
 		/* Forward it to the host we're proxying */
-		if (write_out(buf, len)) {
+		if (write_out(buf, len, direction)) {
 			perror("Failed to write all bytes");
 			return EXIT_FAILURE;
 		}
@@ -228,26 +254,30 @@ static int process_incoming_pkt()
 				sockaddr6_to_human(&from.sin6_addr), ntohs(from.sin6_port));
 		has_source_addr = 1; /* We're logically connected to that guy */
 	}
-	/* Simply relay packets from the host we're proxying */
-	if (!sockaddr_cmp(&from, &dest_addr)) {
-		/* Forward reverse-traffic */
-		if (sendto(sfd, buf, len, 0, (struct sockaddr*)&src_addr,
-					sizeof(src_addr)) != len) {
-			perror("Failed to relay a message back to the source");
-			return EXIT_FAILURE;
-		}
-		return EXIT_SUCCESS;
-	} else if (sockaddr_cmp(&from, &src_addr)) {
+	int direction = 0;
+	if (!sockaddr_cmp(&from, &dest_addr))
+		direction = LINK_REVERSE;
+	if (!sockaddr_cmp(&from, &src_addr))
+		direction = LINK_FORWARD;
+	if (!direction) {
 		/* We do not know the guy that sent us this data, ignore him */
 		fprintf(stderr, "@@ Received %d bytes from %s [%d], "
 			"which is an alien to the connection. Dropping it!\n",
 			len, sockaddr6_to_human(&from.sin6_addr), ntohs(from.sin6_port));
 		return EXIT_SUCCESS;
 	}
+	/* Simply relay packets from the host we're proxying */
+	if (!SAME_DIRECTION(direction, link_direction)) {
+		if (write_out(buf, len, direction)) {
+			perror("Failed to relay a message without altering it.");
+			return EXIT_FAILURE;
+		}
+		return EXIT_SUCCESS;
+	}
 	/* We have valid data, simulate the behavior of a lossy link
 	 * before delivery
 	 */
-	return simulate_link(buf, len);
+	return simulate_link(buf, len, direction);
 }
 
 /* Update last_lock to the current time */
@@ -452,6 +482,8 @@ static void usage(const char *prog_name)
 "-s seed          The seed for the random generator, to replay a previous\n"
 "                 session.\n"
 "                 Defaults to: time() casted to int\n"
+"-r               Simulate the link on the reverse path.\n"
+"-R               Simulate the link in both ways.\n"
 "-h               Prints this message and exit.\n",
 			prog_name,
 			(int)strlen(prog_name),
@@ -463,7 +495,7 @@ int main(int argc, char **argv)
 	int opt;
 	long seed = -1L;
 	/* parse option values */
-	while ((opt = getopt(argc, argv, "p:P:d:j:e:c:s:l:h")) != -1) {
+	while ((opt = getopt(argc, argv, "p:P:d:j:e:c:s:l:hrR")) != -1) {
 		switch (opt) {
 #define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % (lim); break;
 #define _READINT(x, y) _READINT_CAP(x, y, INT_MAX)
@@ -477,6 +509,12 @@ int main(int argc, char **argv)
 			_READINT('s', seed)
 #undef _READINT
 #undef _READINT_CAP
+			case 'r':
+				link_direction = LINK_REVERSE;
+				break;
+			case 'R':
+				link_direction = LINK_BOTH_WAYS;
+				break;
 			case 'h':
 				/* Fall-through */
 			default:
@@ -498,9 +536,11 @@ int main(int argc, char **argv)
 					".. err_rate: %u\n"
 					".. cut_rate: %u\n"
 					".. loss_rate: %u\n"
-					".. seed: %d\n",
+					".. seed: %d\n"
+					".. link_direction: %s\n",
 					port, forward_port, delay, jitter, err_rate,
-					cut_rate, loss_rate, (int)seed);
+					cut_rate, loss_rate, (int)seed,
+					get_link_direction(link_direction));
 	/* Start proxying UDP traffic according to the specified options */
 	return proxy_traffic();
 }
