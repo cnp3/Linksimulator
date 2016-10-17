@@ -66,7 +66,7 @@ static inline const char* get_link_direction(int x)
 }
 
 int forward_port = 12345;
-int port = 2141;
+int port = 1341;
 unsigned int delay = 0;
 unsigned int jitter = 0;
 unsigned int err_rate = 0;
@@ -243,7 +243,8 @@ static int process_incoming_pkt()
 	}
 	/* Check packet consistency */
 	if (len < MIN_PKT_LEN) {
-		printf("Received malformed data, dropping. (len < 4)\n");
+		printf("Received malformed data, dropping. "
+				"(len < %u)\n", MIN_PKT_LEN);
 		return EXIT_SUCCESS;
 	}
 	/* We need to track who is sending us data, so that we can send him the
@@ -467,7 +468,7 @@ static void usage(const char *prog_name)
 "Usage: %s [-p port] [-P forward_port] [-d delay] [-j jitter]\n"
 "       %*s [-e err_rate] [-l loss_rate] [-s seed] [-h]\n"
 "-p port          The UDP port on which the link simulator operates.\n"
-"                 Defaults to: 2141\n"
+"                 Defaults to: 1341\n"
 "-P forward_port  The UDP port on localhost on which the incoming traffic\n"
 "                 should be forwarded.\n"
 "                 Defaults to: 12345\n"
