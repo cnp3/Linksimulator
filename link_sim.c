@@ -31,9 +31,8 @@ SOFTWARE.
 #include <sys/select.h> /* fd_set, select */
 #ifdef __APPLE__
 	#include <sys/time.h> /* gettimeofday */
-#else
-	#include <time.h> /* clock_gettime */
-#endif /* __APPLE__ */
+#endif
+#include <time.h> /* clock_gettime, time */
 #include <string.h> /* memcpy, memcmp */
 #include <errno.h> /* errno, EAGAIN, ... */
 #include <fcntl.h> /* fcntl */
