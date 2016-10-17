@@ -1,7 +1,7 @@
 /*  vi:ts=4:sw=4:noet
 The MIT License (MIT)
 
-Copyright (c) 2015 Olivier Tilmans, olivier.tilmans@uclouvain.be
+Copyright (c) 2015-2016 Olivier Tilmans, olivier.tilmans@uclouvain.be
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -29,17 +29,24 @@ SOFTWARE.
 #include <sys/types.h> /* in6_addr */
 #include <sys/socket.h> /* socket, bind, connect */
 #include <sys/select.h> /* fd_set, select */
-#include <time.h> /* time */
+#ifdef __APPLE__
+	#include <sys/time.h> /* gettimeofday */
+#else
+	#include <time.h> /* clock_gettime */
+#endif /* __APPLE__ */
 #include <string.h> /* memcpy, memcmp */
 #include <errno.h> /* errno, EAGAIN, ... */
 #include <fcntl.h> /* fcntl */
 #include <arpa/inet.h> /* inet_ntop */
 #include <limits.h> /* INT_MAX, SHRT_MAX */
+#include <stdint.h> /* uint8_t */
 
 #include "min_queue.h" /* minq_x */
 
+/* Min packet length in the protocol */
+#define MIN_PKT_LEN 12
 /* Max packet length in the protocol */
-#define MAX_PKT_LEN 520
+#define MAX_PKT_LEN 524
 /* Random number between 0 and 100 */
 #define RAND_PERCENT ((unsigned int)(rand() % 101))
 
@@ -63,7 +70,6 @@ int port = 2141;
 unsigned int delay = 0;
 unsigned int jitter = 0;
 unsigned int err_rate = 0;
-unsigned int cut_rate = 0;
 unsigned int loss_rate = 0;
 int link_direction = LINK_FORWARD;
 int sfd = -1; /* socket file des. */
@@ -113,7 +119,7 @@ static void timeval_diff(const struct timeval *a,
 
 /* Log an action on a processed packet */
 #define LOG_PKT_FMT(buf, fmt, ...) \
-	printf("[SEQ %3u] " fmt, (unsigned char)buf[1], ##__VA_ARGS__)
+	printf("[SEQ %3u] " fmt, (uint8_t)buf[1], ##__VA_ARGS__)
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
@@ -171,11 +177,6 @@ static inline int simulate_link(char *buf, int len, int direction)
 	if (loss_rate && RAND_PERCENT < loss_rate) {
 		LOG_PKT(buf, "Dropping packet");
 		return EXIT_SUCCESS;
-	}
-	/* Do we cut it after the header? */
-	if (cut_rate && RAND_PERCENT < cut_rate) {
-		LOG_PKT(buf, "Cutting packet");
-		len = 4;
 	/* or do we corrupt it? */
 	} else if (err_rate && RAND_PERCENT < err_rate) {
 		int idx = rand() % len;
@@ -230,7 +231,7 @@ static int process_incoming_pkt()
 	char buf[MAX_PKT_LEN]; /* Max allowed packet size for the protocol */
 	int len; /* Actual received packet size */
 	if ((len = recvfrom(sfd, buf, MAX_PKT_LEN, 0,
-					(struct sockaddr *)&from, &len_from)) <= 0) {
+					(struct sockaddr *)&from, &len_from)) < 0) {
 		/* Ignore if we have been interrupted by a signal,
 		 * or if select marked sfd as ready for reading
 		 * without any no data available. */
@@ -241,9 +242,9 @@ static int process_incoming_pkt()
 		return EXIT_FAILURE;
 	}
 	/* Check packet consistency */
-	if (len < 4) {
-		printf("Received malformed data, shutting down!\n");
-		return EXIT_FAILURE;
+	if (len < MIN_PKT_LEN) {
+		printf("Received malformed data, dropping. (len < 4)\n");
+		return EXIT_SUCCESS;
 	}
 	/* We need to track who is sending us data, so that we can send him the
 	 * reverse traffic coming from the host we're proxying
@@ -283,6 +284,12 @@ static int process_incoming_pkt()
 /* Update last_lock to the current time */
 static int update_time()
 {
+#ifdef __APPLE__
+	if (gettimeofday(&last_clock, NULL)) {
+		perror("Cannot get internal clock");
+		return EXIT_FAILURE;
+	}
+#else /* gettimeofday is deprecated */
 	struct timespec ts;
 	if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
 		perror("Cannot internal clock");
@@ -290,6 +297,7 @@ static int update_time()
 	}
 	last_clock.tv_sec = ts.tv_sec;
 	last_clock.tv_usec = ts.tv_nsec/1000;
+#endif /* __APPLE__ */
 	return EXIT_SUCCESS;
 }
 
@@ -457,7 +465,7 @@ static void usage(const char *prog_name)
 "random losses, transmission errors, ...\n"
 "\n"
 "Usage: %s [-p port] [-P forward_port] [-d delay] [-j jitter]\n"
-"       %*s [-e err_rate] [-c cut_rate] [-l loss_rate] [-s seed] [-h]\n"
+"       %*s [-e err_rate] [-l loss_rate] [-s seed] [-h]\n"
 "-p port          The UDP port on which the link simulator operates.\n"
 "                 Defaults to: 2141\n"
 "-P forward_port  The UDP port on localhost on which the incoming traffic\n"
@@ -473,10 +481,6 @@ static void usage(const char *prog_name)
 "-e err_rate      The rate of packet corruption occurrence (in packet/100).\n"
 "                 Defaults to: 0\n"
 "                 A packet that has been corrupted will NOT be cut.\n"
-"-c cut_rate      The rate of packet being cut after the header to simulate\n"
-"                 congestion (in packet/100).\n"
-"                 Defaults to: 0\n"
-"                 A packet that has been cut will NOT be corrupted.\n"
 "-l loss_rate     The rate of packets loss (in packet/100).\n"
 "                 Defaults to 0\n"
 "-s seed          The seed for the random generator, to replay a previous\n"
@@ -495,7 +499,7 @@ int main(int argc, char **argv)
 	int opt;
 	long seed = -1L;
 	/* parse option values */
-	while ((opt = getopt(argc, argv, "p:P:d:j:e:c:s:l:hrR")) != -1) {
+	while ((opt = getopt(argc, argv, "p:P:d:j:e:s:l:hrR")) != -1) {
 		switch (opt) {
 #define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % (lim); break;
 #define _READINT(x, y) _READINT_CAP(x, y, INT_MAX)
@@ -504,7 +508,6 @@ int main(int argc, char **argv)
 			_READINT('d', delay)
 			_READINT('j', jitter)
 			_READINT_CAP('e', err_rate, 101)
-			_READINT_CAP('c', cut_rate, 101)
 			_READINT_CAP('l', loss_rate, 101)
 			_READINT('s', seed)
 #undef _READINT
@@ -534,13 +537,11 @@ int main(int argc, char **argv)
 					".. delay: %u\n"
 					".. jitter: %u\n"
 					".. err_rate: %u\n"
-					".. cut_rate: %u\n"
 					".. loss_rate: %u\n"
 					".. seed: %d\n"
 					".. link_direction: %s\n",
 					port, forward_port, delay, jitter, err_rate,
-					cut_rate, loss_rate, (int)seed,
-					get_link_direction(link_direction));
+					loss_rate, (int)seed, get_link_direction(link_direction));
 	/* Start proxying UDP traffic according to the specified options */
 	return proxy_traffic();
 }
