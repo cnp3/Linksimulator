@@ -494,6 +494,15 @@ static void usage(const char *prog_name)
 			"");
 }
 
+static long parse_number(const char *val)
+{
+	char *c;
+	long parsed = strtol(val, &c, 0);
+	if (*c != '\0')
+		fprintf(stderr, "!! Parsed %s as %ld\n", val, parsed);
+	return parsed;
+}
+
 int main(int argc, char **argv)
 {
 	int opt;
@@ -501,17 +510,27 @@ int main(int argc, char **argv)
 	/* parse option values */
 	while ((opt = getopt(argc, argv, "p:P:d:j:e:s:l:hrR")) != -1) {
 		switch (opt) {
-#define _READINT_CAP(x, y, lim) case x: y = atoi(optarg) % (lim); break;
-#define _READINT(x, y) _READINT_CAP(x, y, INT_MAX)
-			_READINT_CAP('p', port, (1 << 16) - 1)
-			_READINT_CAP('P', forward_port, (1 << 16) - 1)
-			_READINT('d', delay)
-			_READINT('j', jitter)
-			_READINT_CAP('e', err_rate, 101)
-			_READINT_CAP('l', loss_rate, 101)
-			_READINT('s', seed)
-#undef _READINT
-#undef _READINT_CAP
+			case 'p':
+				port = parse_number(optarg) & ((1 << 16) - 1);
+				break;
+			case 'P':
+				forward_port = parse_number(optarg) & ((1 << 16) - 1);
+				break;
+			case 'd':
+				delay = parse_number(optarg);
+				break;
+			case 'j':
+				jitter = parse_number(optarg);
+				break;
+			case 'e':
+				err_rate = parse_number(optarg) % 101;
+				break;
+			case 'l':
+				loss_rate = parse_number(optarg) % 101;
+				break;
+			case 's':
+				seed = parse_number(optarg);
+				break;
 			case 'r':
 				link_direction = LINK_REVERSE;
 				break;
@@ -524,6 +543,12 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 				return EXIT_FAILURE;
 		}
+	}
+	if (optind != argc) {
+		fprintf(stderr, "!! Ignoring positional arguments: ");
+		for (; optind < argc-1; ++optind)
+			fprintf(stderr, "%s, ", argv[optind]);
+		fprintf(stderr, "%s\n", argv[optind]);
 	}
 	/* Setup RNG */
 	if (seed == -1L) {
