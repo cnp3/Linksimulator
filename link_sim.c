@@ -45,7 +45,7 @@ SOFTWARE.
 /* Min packet length in the protocol */
 #define MIN_PKT_LEN 12
 /* Max packet length in the protocol */
-#define MAX_PKT_LEN 524
+#define MAX_PKT_LEN 528
 /* Random number between 0 and 100 */
 #define RAND_PERCENT ((unsigned int)(rand() % 101))
 
@@ -69,6 +69,7 @@ int port = 1341;
 unsigned int delay = 0;
 unsigned int jitter = 0;
 unsigned int err_rate = 0;
+unsigned int cut_rate = 0;
 unsigned int loss_rate = 0;
 int link_direction = LINK_FORWARD;
 int sfd = -1; /* socket file des. */
@@ -176,6 +177,13 @@ static inline int simulate_link(char *buf, int len, int direction)
 	if (loss_rate && RAND_PERCENT < loss_rate) {
 		LOG_PKT(buf, "Dropping packet");
 		return EXIT_SUCCESS;
+	}
+	/* Do we cut it after the header? (only if packet is elligible) */
+	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_LEN) {
+		LOG_PKT(buf, "Truncating packet");
+		len = MIN_PKT_LEN;
+		/* ... and don't forget to mark it as truncated */
+		buf[0] |= 0x20;
 	/* or do we corrupt it? */
 	} else if (err_rate && RAND_PERCENT < err_rate) {
 		int idx = rand() % len;
@@ -465,7 +473,7 @@ static void usage(const char *prog_name)
 "random losses, transmission errors, ...\n"
 "\n"
 "Usage: %s [-p port] [-P forward_port] [-d delay] [-j jitter]\n"
-"       %*s [-e err_rate] [-l loss_rate] [-s seed] [-h]\n"
+"       %*s [-e err_rate] [-c cut_rate] [-l loss_rate] [-s seed] [-h]\n"
 "-p port          The UDP port on which the link simulator operates.\n"
 "                 Defaults to: 1341\n"
 "-P forward_port  The UDP port on localhost on which the incoming traffic\n"
@@ -481,6 +489,10 @@ static void usage(const char *prog_name)
 "-e err_rate      The rate of packet corruption occurrence (in packet/100).\n"
 "                 Defaults to: 0\n"
 "                 A packet that has been corrupted will NOT be cut.\n"
+"-c cut_rate      The rate of packet being cut after the header to simulate\n"
+"                 router truncation due to high network load (in packet/100).\n"
+"                 Defaults to: 0\n"
+"                 A packet that has been cut will NOT be corrupted.\n"
 "-l loss_rate     The rate of packets loss (in packet/100).\n"
 "                 Defaults to 0\n"
 "-s seed          The seed for the random generator, to replay a previous\n"
@@ -508,7 +520,7 @@ int main(int argc, char **argv)
 	int opt;
 	long seed = -1L;
 	/* parse option values */
-	while ((opt = getopt(argc, argv, "p:P:d:j:e:s:l:hrR")) != -1) {
+	while ((opt = getopt(argc, argv, "p:P:d:j:e:c:s:l:hrR")) != -1) {
 		switch (opt) {
 			case 'p':
 				port = parse_number(optarg) & ((1 << 16) - 1);
@@ -524,6 +536,9 @@ int main(int argc, char **argv)
 				break;
 			case 'e':
 				err_rate = parse_number(optarg) % 101;
+				break;
+			case 'c':
+				cut_rate = parse_number(optarg) % 101;
 				break;
 			case 'l':
 				loss_rate = parse_number(optarg) % 101;
@@ -562,10 +577,11 @@ int main(int argc, char **argv)
 					".. delay: %u\n"
 					".. jitter: %u\n"
 					".. err_rate: %u\n"
+					".. cut_rate: %u\n"
 					".. loss_rate: %u\n"
 					".. seed: %d\n"
 					".. link_direction: %s\n",
-					port, forward_port, delay, jitter, err_rate,
+					port, forward_port, delay, jitter, err_rate, cut_rate,
 					loss_rate, (int)seed, get_link_direction(link_direction));
 	/* Start proxying UDP traffic according to the specified options */
 	return proxy_traffic();
