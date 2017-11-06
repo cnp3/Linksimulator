@@ -119,7 +119,7 @@ static void timeval_diff(const struct timeval *a,
 
 /* Log an action on a processed packet */
 #define LOG_PKT_FMT(buf, fmt, ...) \
-	printf("[SEQ %3u] " fmt, (uint8_t)buf[1], ##__VA_ARGS__)
+	fprintf(stderr,"[SEQ %3u] " fmt, (uint8_t)buf[1], ##__VA_ARGS__)
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
@@ -250,7 +250,7 @@ static int process_incoming_pkt()
 	}
 	/* Check packet consistency */
 	if (len < MIN_PKT_LEN) {
-		printf("Received malformed data, dropping. "
+		fprintf(stderr,"Received malformed data, dropping. "
 				"(len < %u)\n", MIN_PKT_LEN);
 		return EXIT_SUCCESS;
 	}
