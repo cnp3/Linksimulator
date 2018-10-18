@@ -193,16 +193,16 @@ static inline int simulate_link(char *buf, int len, int direction)
 	/* Do we want to simulate delay? */
 	if (delay) {
 		/* Random delay to add is capped to 10s */
-    unsigned int applied_delay;
-    if (jitter) {
-      if (jitter > delay) {
-        applied_delay = rand() % (delay + jitter);
-      } else {
-        applied_delay = (delay + rand() % (2 * jitter)) - jitter;
-      }
-    } else {
-      applied_delay = delay;
-    }
+		unsigned int applied_delay;
+		if (jitter) {
+			if (jitter > delay) {
+				applied_delay = rand() % (delay + jitter);
+			} else {
+				applied_delay = (delay + rand() % (2 * jitter)) - jitter;
+			}
+		} else {
+			applied_delay = delay;
+		}
 		applied_delay %= 10000;
 		LOG_PKT_FMT(buf, "Delayed packet by %u ms\n", applied_delay);
 		/* Create a slot for the packet queue */
