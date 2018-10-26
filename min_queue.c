@@ -59,10 +59,8 @@ struct minqueue {
 minqueue_t *minq_new(minq_key_cmp cmp)
 {
 	minqueue_t *q;
-	if (!cmp || !(q = malloc(sizeof(*q)))) {
-		free(q);
+	if (!cmp || !(q = malloc(sizeof(*q))))
 		return NULL;
-	}
 	/* Allocate multiple elements at once to reduce the calls to realloc */
 	if (!(q->e = malloc(SLOTS_PER_MALLOC * sizeof(*q->e)))) {
 		free(q);
