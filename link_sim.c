@@ -256,7 +256,7 @@ static int process_incoming_pkt()
 	/* Check packet consistency */
 	if (len < MIN_PKT_LEN) {
 		fprintf(stderr,"Received malformed data, dropping. "
-				"(len < %u)\n", MIN_PKT_LEN);
+				"(len < %d)\n", MIN_PKT_LEN);
 		return EXIT_SUCCESS;
 	}
 	/* We need to track who is sending us data, so that we can send him the
@@ -577,8 +577,8 @@ int main(int argc, char **argv)
 	}
 	srand((int)seed);
 	fprintf(stderr, "@@ Using parameters:\n"
-					".. port: %u\n"
-					".. forward_port: %u\n"
+					".. port: %d\n"
+					".. forward_port: %d\n"
 					".. delay: %u\n"
 					".. jitter: %u\n"
 					".. err_rate: %u\n"
