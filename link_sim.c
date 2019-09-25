@@ -43,9 +43,15 @@ SOFTWARE.
 #include "min_queue.h" /* minq_x */
 
 /* Min packet length in the protocol */
-#define MIN_PKT_LEN 12
-/* Max packet length in the protocol */
-#define MAX_PKT_LEN 528
+#define MIN_PKT_LEN 11
+/* Position of the length bit in the header */
+#define LENGTH_FIELD_LENGTH_BIT_POS 8
+
+/* 
+ * Max packet length in the protocol (packet with max header size + 
+ * max payload size + CRC2 size 
+ */
+#define MAX_PKT_LEN (MIN_PKT_LEN + 1 + 512 + 4)
 /* Random number between 0 and 100 */
 #define RAND_PERCENT ((unsigned int)(rand() % 101))
 
@@ -181,7 +187,14 @@ static inline int simulate_link(char *buf, int len, int direction)
 	/* Do we cut it after the header? (only if packet is elligible) */
 	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_LEN) {
 		LOG_PKT(buf, "Truncating packet");
+		int len_bit_idx = LENGTH_FIELD_LENGTH_BIT_POS / 8;
+		/* bit_pos: position of the bit from left to right */
+		int bit_pos = len_bit_idx % 8;
 		len = MIN_PKT_LEN;
+		/* if the length field is encoded with 2 bytes, increase the length to have the full header */
+		if ((buf[len_bit_idx] >> (7 - bit_pos)) % 2 == 1)
+			len++;
+
 		/* ... and don't forget to mark it as truncated */
 		buf[0] |= 0x20;
 	/* or do we corrupt it? */
