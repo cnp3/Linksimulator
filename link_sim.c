@@ -189,10 +189,10 @@ static inline int simulate_link(char *buf, int len, int direction)
 		LOG_PKT(buf, "Truncating packet");
 		int len_bit_idx = LENGTH_FIELD_LENGTH_BIT_POS / 8;
 		/* bit_pos: position of the bit from left to right */
-		int bit_pos = len_bit_idx % 8;
+		int bit_pos = LENGTH_FIELD_LENGTH_BIT_POS % 8;
 		len = MIN_PKT_LEN;
 		/* if the length field is encoded with 2 bytes, increase the length to have the full header */
-		if ((buf[len_bit_idx] >> (7 - bit_pos)) % 2 == 1)
+		if ((((uint8_t) buf[len_bit_idx]) >> (7 - bit_pos)) == 1)
 			len++;
 
 		/* ... and don't forget to mark it as truncated */
