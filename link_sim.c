@@ -125,7 +125,7 @@ static void timeval_diff(const struct timeval *a,
 
 /* Log an action on a processed packet */
 #define LOG_PKT_FMT(buf, fmt, ...) \
-	fprintf(stderr,"[SEQ %3u] " fmt, ((uint8_t)buf[1] & 0x80) ? (((uint16_t)buf[2]) << 8) + (uint16_t)buf[3] : buf[2], ##__VA_ARGS__)
+	fprintf(stderr,"[SEQ %3hhu] " fmt, ((uint8_t)buf[1] & 0x80) ? buf[3] : buf[2], ##__VA_ARGS__)
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
