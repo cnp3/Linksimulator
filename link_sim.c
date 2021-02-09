@@ -43,15 +43,17 @@ SOFTWARE.
 #include "min_queue.h" /* minq_x */
 
 /* Min packet length in the protocol */
-#define MIN_PKT_LEN 11
+#define MIN_PKT_LEN 10
+/* Min packet length of a data packet in the protocol */
+#define MIN_PKT_PDATA_LEN 12
 /* Position of the length bit in the header */
 #define LENGTH_FIELD_LENGTH_BIT_POS 8
 
-/* 
- * Max packet length in the protocol (packet with max header size + 
- * max payload size + CRC2 size 
+/*
+ * Max packet length in the protocol (packet with max header size +
+ * max payload size + CRC2 size
  */
-#define MAX_PKT_LEN (MIN_PKT_LEN + 1 + 512 + 4)
+#define MAX_PKT_LEN (MIN_PKT_LEN + 2 + 512 + 4)
 /* Random number between 0 and 100 */
 #define RAND_PERCENT ((unsigned int)(rand() % 101))
 
@@ -125,7 +127,7 @@ static void timeval_diff(const struct timeval *a,
 
 /* Log an action on a processed packet */
 #define LOG_PKT_FMT(buf, fmt, ...) \
-	fprintf(stderr,"[SEQ %3hhu] " fmt, ((uint8_t)buf[1] & 0x80) ? buf[3] : buf[2], ##__VA_ARGS__)
+	fprintf(stderr,"[SEQ %3hhu] " fmt, (((uint8_t)buf[0] & 0xC0) == 0x40) ? buf[3] : buf[1], ##__VA_ARGS__)
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
@@ -185,16 +187,9 @@ static inline int simulate_link(char *buf, int len, int direction)
 		return EXIT_SUCCESS;
 	}
 	/* Do we cut it after the header? (only if packet is elligible) */
-	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_LEN) {
+	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_PDATA_LEN) {
 		LOG_PKT(buf, "Truncating packet");
-		int len_bit_idx = LENGTH_FIELD_LENGTH_BIT_POS / 8;
-		/* bit_pos: position of the bit from left to right */
-		int bit_pos = LENGTH_FIELD_LENGTH_BIT_POS % 8;
-		len = MIN_PKT_LEN;
-		/* if the length field is encoded with 2 bytes, increase the length to have the full header */
-		if ((((uint8_t) buf[len_bit_idx]) >> (7 - bit_pos)) == 1)
-			len++;
-
+		len = MIN_PKT_PDATA_LEN;
 		/* ... and don't forget to mark it as truncated */
 		buf[0] |= 0x20;
 	/* or do we corrupt it? */
