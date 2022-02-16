@@ -127,7 +127,7 @@ static void timeval_diff(const struct timeval *a,
 
 /* Log an action on a processed packet */
 #define LOG_PKT_FMT(buf, fmt, ...) \
-	fprintf(stderr,"[SEQ %3hhu] " fmt, (((uint8_t)buf[0] & 0xC0) == 0x40) ? buf[3] : buf[1], ##__VA_ARGS__)
+	fprintf(stderr,"[%s %3hhu] " fmt, ((uint8_t)buf[0] & 0xC0) == 0x00 ? "FEC" : "SEQ" , (((uint8_t)buf[0] & 0xC0) <= 0x40) ? buf[3] : buf[1], ##__VA_ARGS__)
 #define LOG_PKT(buf, msg) LOG_PKT_FMT(buf, msg "\n")
 
 /* Send a packet to the host we're proxying */
@@ -187,7 +187,7 @@ static inline int simulate_link(char *buf, int len, int direction)
 		return EXIT_SUCCESS;
 	}
 	/* Do we cut it after the header? (only if packet is elligible) */
-	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_PDATA_LEN) {
+	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_PDATA_LEN && ((uint8_t) buf[0]) == 0x40) {
 		LOG_PKT(buf, "Truncating packet");
 		len = MIN_PKT_PDATA_LEN;
 		/* ... and don't forget to mark it as truncated */
