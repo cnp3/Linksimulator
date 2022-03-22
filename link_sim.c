@@ -187,7 +187,7 @@ static inline int simulate_link(char *buf, int len, int direction)
 		return EXIT_SUCCESS;
 	}
 	/* Do we cut it after the header? (only if packet is elligible) */
-	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_PDATA_LEN && ((uint8_t) buf[0]) == 0x40) {
+	if (cut_rate && RAND_PERCENT < cut_rate && len > MIN_PKT_PDATA_LEN &&  ((uint8_t) buf[0])>>6 == 1) {
 		LOG_PKT(buf, "Truncating packet");
 		len = MIN_PKT_PDATA_LEN;
 		/* ... and don't forget to mark it as truncated */
